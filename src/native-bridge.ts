@@ -7,20 +7,26 @@ import {
   getPushPermission,
   initialisePushNotificationListeners,
 } from './push-notifications';
+import { pickPhoto, shareContent, takePhoto } from './native-features';
 
 const APP_SCHEME = 'pechpechoo://';
 const TRUSTED_HOSTS = new Set(['pechpechoo.au', 'www.pechpechoo.au']);
 const GOOGLE_AUTH_PATH = '/auth/google';
+const APPLE_AUTH_PATH = '/auth/apple';
 
 type NativeBridge = {
   isNative: true;
   platform: 'ios' | 'android' | 'web';
   openExternal: (url: string) => Promise<void>;
   startGoogleLogin: () => Promise<void>;
+  startAppleLogin: () => Promise<void>;
   getNetworkStatus: () => Promise<{ connected: boolean; connectionType: string }>;
   hideSplash: () => Promise<void>;
   getPushPermission: () => Promise<string>;
   enablePushNotifications: () => Promise<{ permission: string; registered: boolean }>;
+  share: (input: { title?: string; text?: string; url?: string }) => Promise<void>;
+  takePhoto: () => Promise<{ webPath?: string; format: string }>;
+  pickPhoto: () => Promise<{ webPath?: string; format: string }>;
 };
 
 declare global {
@@ -49,16 +55,17 @@ function routeDeepLink(url: string) {
   if (parsed.hostname === 'auth' && parsed.pathname === '/callback') {
     const code = parsed.searchParams.get('code');
     const error = parsed.searchParams.get('error');
+    const provider = parsed.searchParams.get('provider') ?? 'unknown';
 
     void Browser.close().catch(() => undefined);
 
     if (error) {
-      dispatch('pechpechoo:auth-error', { error });
+      dispatch('pechpechoo:auth-error', { error, provider });
       return;
     }
 
     if (code) {
-      dispatch('pechpechoo:auth-callback', { code });
+      dispatch('pechpechoo:auth-callback', { code, provider });
     }
   }
 }
@@ -109,6 +116,12 @@ async function updateOfflineState(connected: boolean) {
   overlay.style.display = connected ? 'none' : 'flex';
 }
 
+function mobileAuthUrl(path: string) {
+  const url = new URL(path, 'https://pechpechoo.au');
+  url.searchParams.set('platform', 'mobile');
+  return url.toString();
+}
+
 export async function initialiseNativeBridge(platform: NativeBridge['platform']) {
   await initialisePushNotificationListeners();
 
@@ -120,9 +133,10 @@ export async function initialiseNativeBridge(platform: NativeBridge['platform'])
       await Browser.open({ url });
     },
     startGoogleLogin: async () => {
-      const url = new URL(GOOGLE_AUTH_PATH, 'https://pechpechoo.au');
-      url.searchParams.set('platform', 'mobile');
-      await Browser.open({ url: url.toString() });
+      await Browser.open({ url: mobileAuthUrl(GOOGLE_AUTH_PATH) });
+    },
+    startAppleLogin: async () => {
+      await Browser.open({ url: mobileAuthUrl(APPLE_AUTH_PATH) });
     },
     getNetworkStatus: async () => {
       const status = await Network.getStatus();
@@ -133,6 +147,9 @@ export async function initialiseNativeBridge(platform: NativeBridge['platform'])
     },
     getPushPermission: async () => getPushPermission(),
     enablePushNotifications: async () => enablePushNotifications(),
+    share: shareContent,
+    takePhoto,
+    pickPhoto,
   };
 
   const initialStatus = await Network.getStatus();
