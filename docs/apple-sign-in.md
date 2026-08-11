@@ -1,43 +1,46 @@
 # Sign in with Apple
 
-Pech Pechoo should support Sign in with Apple before iOS App Store submission because Google is offered as a social login for the user's primary account.
+Required before iOS App Store submission because the app offers Google login for the user's primary account.
 
-## Recommended architecture
+## Backend flow
 
-Keep Apple authentication server-backed, matching the existing Google architecture.
+1. App opens `https://pechpechoo.au/auth/apple?platform=mobile` in the system browser.
+2. Backend starts Apple authorisation.
+3. Apple returns to the registered HTTPS backend callback.
+4. Backend validates the response and creates/links the MongoDB user.
+5. Backend creates a random, single-use exchange code expiring in 60–120 seconds.
+6. Backend redirects to:
 
-1. Native app opens `https://pechpechoo.au/auth/apple?platform=mobile` in the system browser.
-2. Backend starts Sign in with Apple authorization.
-3. Apple posts the authorization response to an HTTPS callback under `pechpechoo.au`.
-4. Backend validates the Apple authorization response and creates/links the MongoDB user.
-5. Backend creates a short-lived, single-use mobile exchange code.
-6. Backend redirects to `pechpechoo://auth/callback?provider=apple&code=<single-use-code>`.
-7. Capacitor receives the deep link and dispatches `pechpechoo:auth-callback`.
-8. Website exchanges the code through the same `/api/v1/auth/mobile/exchange` endpoint used for Google.
+`pechpechoo://auth/callback?provider=apple&code=<code>`
 
-## Apple Developer configuration
+7. App emits `pechpechoo:auth-callback`.
+8. Website exchanges the code through the same `POST /api/v1/auth/mobile/exchange` endpoint used by Google.
 
-The Apple Developer account will need:
+## Apple Developer setup
 
-- App ID for `au.pechpechoo` with Sign in with Apple enabled.
-- A Services ID for the web/server authorization flow.
-- `pechpechoo.au` registered as an approved domain.
-- An HTTPS Apple return URL registered for the backend callback.
-- A Sign in with Apple private key stored only on the backend/secret manager.
+- App ID: `au.pechpechoo`, Sign in with Apple enabled.
+- Services ID for server/web authorisation.
+- Register `pechpechoo.au` and the backend HTTPS return URL.
+- Store the Sign in with Apple private key only in backend secrets.
 
-The Apple return URL itself must be HTTPS. Apple should return to the backend first; the backend then redirects to the Pech Pechoo custom app scheme using only a short-lived exchange code.
+## Frontend requirement
 
-## Account linking
+Show the Apple login option in the iOS app and call:
 
-Prefer deterministic linking rules and never merge two existing Pech Pechoo accounts solely because display names match.
+```ts
+window.PechPechooNative?.startAppleLogin()
+```
 
-If Apple supplies an email that matches an existing account, apply the same verified-email/account-linking policy used by the current authentication system. Apple may provide a private relay email, so the persistent Apple subject identifier should be stored as the provider identity.
+Use the same callback/error handling as Google.
 
-## Security
+## Account/security requirements
 
-- Validate `state` and `nonce`.
-- Validate Apple identity tokens server-side.
-- Keep Apple private keys and client secrets off the app and website bundle.
-- Do not put Pech Pechoo JWTs in callback URLs.
-- Make mobile exchange codes random, single-use and short-lived.
-- Store the Apple provider subject ID for future login matching.
+- Validate `state`, `nonce` and Apple identity tokens server-side.
+- Store Apple's stable provider subject ID.
+- Do not merge accounts based on display name.
+- Apply the existing verified-email linking policy; Apple may provide a private relay email.
+- Never put Pech Pechoo JWTs in redirect URLs.
+
+## Acceptance test
+
+On a physical iPhone: tap Apple login → authenticate → app reopens → user is created/linked and logged in.
