@@ -1,0 +1,55 @@
+name: Android release bundle
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-aab:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Create Android project when absent
+        run: |
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
+
+      - name: Sync Capacitor
+        run: npm run sync
+
+      - name: Decode upload keystore
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/pechpechoo-upload.keystore
+
+      - name: Build release AAB
+        working-directory: android
+        env:
+          PECHPECHOO_STORE_FILE: pechpechoo-upload.keystore
+          PECHPECHOO_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          PECHPECHOO_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          PECHPECHOO_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew bundleRelease
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: pech-pechoo-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
