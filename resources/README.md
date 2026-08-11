@@ -1,20 +1,26 @@
-# App icon and splash assets
+# Pech Pechoo native assets
 
-Before generating final store assets, add the approved Pech Pechoo brand artwork here.
+Place the approved brand source files in this directory before running `npm run assets`:
 
-Recommended source files:
+- `icon.png` — 1024×1024 PNG app icon source.
+- `splash.png` — 2732×2732 PNG splash source.
 
-- `icon-only.png` — square PNG, at least 1024×1024, no transparency for safest App Store handling.
-- `icon-foreground.png` — optional Android adaptive icon foreground.
-- `icon-background.png` — optional Android adaptive icon background.
-- `splash.png` — high-resolution centred Pech Pechoo mark for splash generation.
-- `splash-dark.png` — optional dark-mode splash artwork.
+Approved brand details:
 
-Then run:
+- Primary blue: `#5669FF`
+- Product name: `Pech Pechoo`
+- Bundle ID: `au.pechpechoo`
+- Brand typeface: Airbnb Cereal (use only where licensing permits bundling; the wrapped website remains responsible for its own web-font delivery).
+
+The approved Milestone 1 artwork is the blue calendar/chat icon and the white Pech Pechoo splash artwork supplied in chat. The Capacitor asset generator creates the required iOS and Android size variants from these source PNGs.
+
+Run:
 
 ```bash
 npm run assets
 npm run sync
 ```
+
+Do not bake rounded corners into the iOS app icon; the operating system applies the icon mask.
 
 Do not commit signing certificates, provisioning profiles, Firebase configuration files, keystores, or other secrets to this public repository.
