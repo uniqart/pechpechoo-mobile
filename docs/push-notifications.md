@@ -1,58 +1,57 @@
-# Push notification architecture
+# Push notifications
 
-Pech Pechoo uses Capacitor's official `@capacitor/push-notifications` plugin.
+Pech Pechoo uses `@capacitor/push-notifications`.
 
-## Runtime behaviour
+## Frontend
 
-The native bridge now exposes:
+Request permission only after explaining the value to the user:
 
 ```ts
-window.PechPechooNative?.getPushPermission()
-window.PechPechooNative?.enablePushNotifications()
+await window.PechPechooNative?.enablePushNotifications();
 ```
 
-Do not request notification permission automatically on first launch. Ask at a useful product moment after the user understands why notifications are valuable.
-
-When registration succeeds, the mobile runtime dispatches:
+On registration:
 
 ```ts
-window.addEventListener('pechpechoo:push-token', (event) => {
+window.addEventListener('pechpechoo:push-token', async (event) => {
   const { token } = event.detail;
+  // POST token + platform to backend
 });
 ```
 
-The website should send that token to the backend and associate it with the authenticated user/device.
+Handle:
+
+- `pechpechoo:push-received` — foreground notification
+- `pechpechoo:push-action` — notification tapped
+- `pechpechoo:navigate` — validated internal navigation path
+- `pechpechoo:push-registration-error` — registration failure
+
+## Backend API
 
 Suggested endpoint:
 
 `POST /api/v1/users/me/push-tokens`
 
-Suggested request:
-
 ```json
 {
-  "token": "native-device-token",
+  "token": "<device-token>",
   "platform": "ios"
 }
 ```
 
-Store multiple active device tokens per account and support token replacement/removal. Do not assume one token per user.
+Also provide token removal on logout/device removal.
 
-## Notification events
+Backend must:
 
-Foreground notification:
+- support multiple device tokens per user
+- deduplicate/update tokens
+- remove invalid tokens after provider errors
+- store platform/provider with each token
+- keep APNs/FCM server credentials private
 
-`pechpechoo:push-received`
+## Notification payload
 
-Notification tapped/opened:
-
-`pechpechoo:push-action`
-
-Registration failure:
-
-`pechpechoo:push-registration-error`
-
-The notification payload should include a safe internal destination such as:
+Use only validated internal routes:
 
 ```json
 {
@@ -62,27 +61,24 @@ The notification payload should include a safe internal destination such as:
 }
 ```
 
-The website should validate the path before navigating. Do not accept arbitrary external URLs from push payloads.
+Never send arbitrary external URLs for in-app navigation.
 
-## Android configuration
+## Native configuration
 
-Android push delivery requires a Firebase project configured for the Android application ID `au.pechpechoo` and the resulting `google-services.json` placed in the generated native Android app at:
+### Android
 
-`android/app/google-services.json`
+- Firebase project for application ID `au.pechpechoo`
+- `android/app/google-services.json`
+- backend FCM credentials
 
-Do not commit production Firebase credentials/configuration to the public repository unless the development team has explicitly confirmed the configuration contains no sensitive server credentials. Server-side Firebase credentials must never be committed.
+### iOS
 
-## iOS configuration
+- Push Notifications capability for `au.pechpechoo`
+- APNs entitlement/provisioning
+- backend APNs credentials
 
-iOS requires the Push Notifications capability and the appropriate APNs entitlement/provisioning configuration for `au.pechpechoo` in the Apple Developer account/Xcode project.
+With the current Capacitor setup, treat iOS registration values as APNs tokens and Android registration values as FCM tokens.
 
-The backend notification service must know whether a registered token is an iOS/APNs token or an Android/FCM token.
+## Acceptance test
 
-## Backend responsibilities
-
-- Associate tokens with authenticated users and platforms.
-- Deduplicate tokens.
-- Remove invalid/unregistered tokens after provider errors.
-- Never trust navigation data received from a push notification without validation.
-- Send only the minimum data required in notification payloads.
-- Keep APNs keys and Firebase server credentials on the backend only.
+On physical iOS and Android devices: opt in → token reaches backend → foreground notification arrives → tapping a notification opens the intended Pech Pechoo screen.
