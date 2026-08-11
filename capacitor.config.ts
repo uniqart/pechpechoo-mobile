@@ -1,5 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
+const BRAND_BLUE = '#5669FF';
+
 const config: CapacitorConfig = {
   appId: 'au.pechpechoo',
   appName: 'Pech Pechoo',
@@ -21,14 +23,14 @@ const config: CapacitorConfig = {
     StatusBar: {
       overlaysWebView: false,
       style: 'LIGHT',
-      backgroundColor: '#FFFFFF'
+      backgroundColor: BRAND_BLUE
     }
   },
   android: {
-    backgroundColor: '#FFFFFF'
+    backgroundColor: BRAND_BLUE
   },
   ios: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: BRAND_BLUE,
     contentInset: 'automatic'
   }
 };
