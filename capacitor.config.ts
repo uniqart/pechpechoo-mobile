@@ -13,7 +13,7 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 1200,
+      launchShowDuration: 1400,
       launchAutoHide: true,
       backgroundColor: '#FFFFFF',
       showSpinner: false
@@ -23,6 +23,13 @@ const config: CapacitorConfig = {
       style: 'LIGHT',
       backgroundColor: '#FFFFFF'
     }
+  },
+  android: {
+    backgroundColor: '#FFFFFF'
+  },
+  ios: {
+    backgroundColor: '#FFFFFF',
+    contentInset: 'automatic'
   }
 };
 
