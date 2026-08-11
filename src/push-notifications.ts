@@ -15,6 +15,20 @@ function dispatch(name: string, detail?: unknown) {
   window.dispatchEvent(new CustomEvent(name, { detail }));
 }
 
+function getSafeInternalPath(notification: PushNotificationSchema): string | null {
+  const raw = notification.data?.path;
+  if (typeof raw !== 'string') return null;
+  if (!raw.startsWith('/') || raw.startsWith('//')) return null;
+
+  try {
+    const resolved = new URL(raw, 'https://pechpechoo.au');
+    if (resolved.origin !== 'https://pechpechoo.au') return null;
+    return `${resolved.pathname}${resolved.search}${resolved.hash}`;
+  } catch {
+    return null;
+  }
+}
+
 let listenersInitialised = false;
 
 export async function initialisePushNotificationListeners() {
@@ -39,11 +53,18 @@ export async function initialisePushNotificationListeners() {
   await PushNotifications.addListener(
     'pushNotificationActionPerformed',
     (action: ActionPerformed) => {
+      const path = getSafeInternalPath(action.notification);
+
       dispatch('pechpechoo:push-action', {
         actionId: action.actionId,
         inputValue: action.inputValue,
         notification: action.notification,
+        path,
       });
+
+      if (path) {
+        dispatch('pechpechoo:navigate', { path, source: 'push' });
+      }
     },
   );
 }
