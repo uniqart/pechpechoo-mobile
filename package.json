@@ -4,9 +4,13 @@
   "private": true,
   "description": "Pech Pechoo mobile app wrapper built with Capacitor",
   "scripts": {
+    "native:add": "npm run native:add:ios && npm run native:add:android",
+    "native:add:ios": "npx cap add ios",
+    "native:add:android": "npx cap add android",
     "sync": "npx cap sync",
     "open:ios": "npx cap open ios",
-    "open:android": "npx cap open android"
+    "open:android": "npx cap open android",
+    "assets": "npx capacitor-assets generate"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",
@@ -20,6 +24,7 @@
     "@capacitor/status-bar": "^7.0.3"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^7.4.3",
     "typescript": "^5.9.2"
   }
