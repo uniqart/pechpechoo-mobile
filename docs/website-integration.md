@@ -1,10 +1,15 @@
-# Website integration requirements
+# Website/backend integration
 
-This file is the running handoff checklist for the Pech Pechoo web developer. The Capacitor app currently loads the production site directly, so the website must initialise the mobile runtime when running inside the native container.
+Implement these changes in order. Keep normal browser behaviour unchanged; native-only behaviour should use `Capacitor.isNativePlatform()`.
 
-## 1. Add Capacitor mobile runtime to the web app
+## 1. Add the mobile runtime
 
-Install the required Capacitor packages in the website project and port/import the logic from `src/native-bridge.ts`, `src/push-notifications.ts`, `src/native-features.ts` and `src/index.ts`.
+Port/import from the mobile repo:
+
+- `src/index.ts`
+- `src/native-bridge.ts`
+- `src/push-notifications.ts`
+- `src/native-features.ts`
 
 Required packages:
 
@@ -16,210 +21,120 @@ Required packages:
 - `@capacitor/share`
 - `@capacitor/splash-screen`
 
-The website should initialise the bridge only when `Capacitor.isNativePlatform()` is true.
+## 2. Fix social login
 
-Expected global API after initialisation:
+### Google
 
-```ts
-window.PechPechooNative = {
-  isNative: true,
-  platform: 'ios' | 'android',
-  openExternal(url),
-  startGoogleLogin(),
-  startAppleLogin(),
-  getNetworkStatus(),
-  hideSplash(),
-  getPushPermission(),
-  enablePushNotifications(),
-  share(input),
-  takePhoto(),
-  pickPhoto(),
-};
-```
-
-## 2. Google and Apple login buttons
-
-When running natively, Google login must call:
+In the native app, call:
 
 ```ts
 window.PechPechooNative?.startGoogleLogin()
 ```
 
-Apple login must call:
+Implement the backend mobile flow in `authentication.md`, including `POST /api/v1/auth/mobile/exchange`.
+
+### Apple
+
+For iOS, show Apple login and call:
 
 ```ts
 window.PechPechooNative?.startAppleLogin()
 ```
 
-Do not navigate the embedded WebView directly to either identity provider.
+Implement `apple-sign-in.md`.
 
-The backend must support the mobile OAuth branch described in `docs/authentication.md` and `docs/apple-sign-in.md`.
-
-The website should listen for the shared callback event:
+### Shared callback
 
 ```ts
 window.addEventListener('pechpechoo:auth-callback', async (event) => {
   const { code, provider } = event.detail;
-  // POST code to /api/v1/auth/mobile/exchange
-  // Persist the returned web session/JWT state using the app's normal auth layer.
+  // exchange code and update the existing authenticated session
 });
 ```
 
-Also handle `pechpechoo:auth-error` and show the normal login error UI.
+Handle `pechpechoo:auth-error` with the existing login error UI.
 
-## 3. Session security
+## 3. Session/logout
 
-Keep the current backend as the single authority for authentication. The mobile wrapper must not create a parallel user/session system.
+- Keep the existing backend/session model; do not create a second mobile user store.
+- Never place JWTs in social-login callback URLs.
+- Review JavaScript-accessible long-lived refresh-token storage; prefer Secure, HttpOnly cookies where compatible.
+- Logout must clear the Pech Pechoo session and remove the current push token if notifications should stop after logout.
 
-For mobile social login, exchange only a short-lived, single-use code through the deep link. Never place access or refresh JWTs in the callback URL.
+## 4. App loading/offline/external links
 
-After the code exchange, use the website's existing authenticated-session mechanism. If the current refresh token is accessible to JavaScript (for example localStorage), the development team should review moving the long-lived refresh credential to a Secure, HttpOnly cookie where the current architecture permits it. Access tokens should remain short-lived.
-
-Logout must clear the normal Pech Pechoo session and should also disassociate the current device push token if the product does not intend notifications to continue after logout.
-
-## 4. App-ready / loading state
-
-When the authenticated/public application shell is ready for interaction, call:
+When initial session restoration and the application shell are ready:
 
 ```ts
 await window.PechPechooNative?.hideSplash();
 ```
 
-Do this after the initial auth/session restore has completed, rather than on the first JavaScript execution.
-
-For now the native configuration still auto-hides the splash as a safety fallback. Once this integration is deployed and verified, `launchAutoHide` can be disabled so the website controls the hand-off precisely.
-
-## 5. Offline handling
-
-The mobile runtime listens to Capacitor Network changes and displays a native-app-specific full-screen retry state when the device is offline.
-
-The website may additionally listen to:
+Optional network event:
 
 ```ts
 window.addEventListener('pechpechoo:network-change', (event) => {
-  const { connected, connectionType } = event.detail;
+  const { connected } = event.detail;
 });
 ```
 
-Normal API error handling should remain in place because being technically online does not guarantee the backend is reachable.
-
-## 6. External links
-
-Links outside `pechpechoo.au` and `www.pechpechoo.au` should open in the system browser rather than replacing the app WebView.
-
-Where the application programmatically opens an external URL rather than using an `<a>` element, call:
+For programmatic external links:
 
 ```ts
 window.PechPechooNative?.openExternal(url)
 ```
 
-Only HTTPS URLs are permitted by the bridge.
+The native bridge already handles normal external `<a>` links and Android Back behaviour.
 
-## 7. Android back behaviour
+## 5. Push notifications
 
-The runtime handles the Android system Back button as follows:
+Implement `push-notifications.md`.
 
-- Navigate back through web history when possible.
-- Exit the app when there is no useful history.
-
-The web app should avoid artificially adding duplicate history entries during redirects because this can make the native Back experience confusing.
-
-## 8. Push notifications
-
-Do not request notification permission immediately on first launch. Prompt after a relevant user action or an explanation of the benefit.
-
-Request/enable notifications with:
+Key hooks:
 
 ```ts
 await window.PechPechooNative?.enablePushNotifications();
 ```
 
-When native registration succeeds:
-
 ```ts
 window.addEventListener('pechpechoo:push-token', async (event) => {
-  const { token } = event.detail;
-  // POST token + native platform to the authenticated backend.
+  // save token + platform for authenticated user
 });
 ```
-
-The backend should associate multiple device tokens with a user rather than storing a single token on the user record. See `docs/push-notifications.md`.
-
-Foreground notifications are emitted through `pechpechoo:push-received`.
-
-Notification taps emit both `pechpechoo:push-action` and, when a safe internal route exists, `pechpechoo:navigate`:
 
 ```ts
 window.addEventListener('pechpechoo:navigate', (event) => {
-  const { path, source } = event.detail;
-  // Route with the application's normal client-side router.
+  // route event.detail.path using the existing router
 });
 ```
 
-Push payloads should use a path such as:
+## 6. Optional native features
 
-```json
-{
-  "path": "/events/123"
-}
-```
-
-The native layer rejects absolute URLs, protocol-relative URLs and external origins. The frontend should still route only to screens supported by the product.
-
-## 9. Native share sheet
-
-Where sharing is useful, call:
+Use where the existing product needs them:
 
 ```ts
-await window.PechPechooNative?.share({
-  title: 'Pech Pechoo',
-  text: 'Optional share text',
-  url: 'https://pechpechoo.au/...',
-});
+window.PechPechooNative?.share({ title, text, url })
+window.PechPechooNative?.takePhoto()
+window.PechPechooNative?.pickPhoto()
 ```
 
-Keep the browser Web Share API or existing fallback for non-native users.
+Connect selected photos to the existing upload pipeline.
 
-## 10. Camera and photo library
+## 7. Later: Universal/App Links
 
-The bridge provides:
-
-```ts
-const cameraPhoto = await window.PechPechooNative?.takePhoto();
-const libraryPhoto = await window.PechPechooNative?.pickPhoto();
-```
-
-The returned `webPath` is suitable for preview/display. The web developer must connect the selected image to the application's existing upload pipeline rather than treating the path as a permanent file URL.
-
-Ask for camera/photo permission only when the user starts the relevant action.
-
-## 11. Universal Links and Android App Links
-
-The custom `pechpechoo://` callback is sufficient for the initial mobile OAuth implementation, but production HTTPS links should later open the installed app where appropriate.
-
-The website will need to host:
+When release credentials are final, host:
 
 - `/.well-known/apple-app-site-association`
 - `/.well-known/assetlinks.json`
 
-The exact values depend on the final Apple Team ID and Android signing certificate fingerprint. Do not publish placeholder values.
+Values require the final Apple Team ID and Android signing certificate fingerprint.
 
-Once configured, keep routes narrow: only claim Pech Pechoo URLs that genuinely belong inside the app.
+## Completion criteria
 
-## 12. Native detection
+Before store submission, verify on physical devices:
 
-Do not rely on user-agent sniffing. Use Capacitor native-platform detection in the website bundle and keep the normal website behaviour unchanged in desktop/mobile browsers.
-
-## 13. Final backend/API tasks
-
-Before store submission, backend work should include:
-
-- mobile Google OAuth branch + short-lived exchange code
-- Apple sign-in route + identity validation/account linking
-- `POST /api/v1/auth/mobile/exchange` or equivalent
-- authenticated device-token registration/removal endpoints
-- notification payloads using validated internal `path` values
-- logout/device-token behaviour agreed and implemented
-- privacy policy/terms URLs available publicly
-
-Any endpoint naming can differ from this document as long as the same security model and behaviour are retained.
+- email/password login
+- Google login
+- Apple login on iOS
+- logout/session expiry
+- push registration and notification navigation
+- external links and offline behaviour
