@@ -1,28 +1,45 @@
 # Release checklist
 
-Use this only after `website-integration.md`, authentication and push notifications are working end to end.
+Use only after `website-integration.md`, authentication and push notifications work end to end.
 
-## Shared
+## Code/security
 
 - Production HTTPS/API URLs confirmed.
-- `npm install`, `npm run assets`, `npm run sync` complete.
-- Icon/splash verified on physical devices.
-- Email/password, Google and Apple login verified.
-- Logout/session expiry verified.
-- Push registration, receipt and tap navigation verified.
-- Offline/external-link behaviour verified.
-- Public privacy policy and terms URLs live.
-- Remove test endpoints/debug logging.
+- Audit committed `.env` files in application repositories; remove/rotate any exposed secrets and keep secrets out of Git.
+- Remove test endpoints and unnecessary debug logging.
+- Privacy policy and terms are public without login.
+
+## Functional gate
+
+On physical devices verify:
+
+- email/password login
+- Google mobile login
+- Apple login on iOS
+- logout/session expiry
+- push registration, receipt and tap navigation
+- offline behaviour and external links
+- icon/splash and status-bar presentation
+
+## Mobile build
+
+From `uniqart/pechpechoo-mobile`:
+
+```bash
+npm install
+npm run assets
+npm run sync
+```
 
 ## iOS / App Store
 
 - App ID `au.pechpechoo` configured.
-- Signing/provisioning configured.
+- Production signing/provisioning configured.
 - Sign in with Apple enabled.
 - Push Notifications/APNs configured.
-- Camera/photo usage descriptions added if those features are used.
-- Valid `PrivacyInfo.xcprivacy` included for the final dependency set; Capacitor is on Apple's list of SDKs subject to privacy-manifest requirements.
-- Associated Domains added if Universal Links are enabled.
+- Camera/photo usage descriptions included if those features are exposed.
+- Final `PrivacyInfo.xcprivacy`/required-reason API declarations reviewed against the final Capacitor/plugin dependency set.
+- Associated Domains configured only when Universal Links are ready.
 - Archive and test through TestFlight.
 - Complete App Privacy, age rating, screenshots, review notes and privacy policy in App Store Connect.
 
@@ -34,7 +51,7 @@ Use this only after `website-integration.md`, authentication and push notificati
 - Firebase/FCM configured and `google-services.json` supplied to the build.
 - Signed `.aab` tested through Internal Testing.
 - Complete Data safety, content rating, target audience, app access and privacy policy.
-- Configure App Links if `assetlinks.json` is deployed.
+- Configure App Links only after `assetlinks.json` is deployed and verified.
 
 GitHub Actions release secrets:
 
@@ -45,13 +62,13 @@ GitHub Actions release secrets:
 
 ## Universal/App Links
 
-When enabled, website hosts:
+When enabled, `pechpechoo.au` hosts:
 
 - `/.well-known/apple-app-site-association`
 - `/.well-known/assetlinks.json`
 
-Until then, `pechpechoo://auth/callback` remains the mobile social-login callback.
+Until then, `pechpechoo://auth/callback` remains the social-login app callback.
 
 ## Release gate
 
-Do not submit until authentication and notifications work on physical iOS and Android devices.
+Do not submit until the live `uniqart/PechPechoo` integration and backend changes have been deployed and authentication/push flows pass on physical iOS and Android devices.
