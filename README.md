@@ -9,11 +9,41 @@ Capacitor wrapper for the Pech Pechoo web application.
 - Web app: `https://pechpechoo.au`
 - Platforms: iOS and Android
 
-## Milestone 1 — foundation
+## Current milestone status
 
-The repository contains the Capacitor configuration, native dependencies, local fallback shell, native bootstrap script and asset-generation setup.
+### Milestone 1 — foundation
 
-Capacitor's generated `ios/` and `android/` projects should be created from this source configuration rather than hand-maintained boilerplate.
+Complete:
+
+- Capacitor configuration
+- iOS/Android bootstrap workflow
+- Pech Pechoo icon and splash asset sources
+- App identity and branding
+- Android debug build workflow
+
+### Milestone 2 — native wrapper UX
+
+Implemented in the mobile runtime/reference integration:
+
+- Native bridge
+- Deep-link callback handling
+- System-browser Google OAuth flow
+- Offline/retry state
+- External-link safeguards
+- Android back-button handling
+- Native splash hand-off
+
+### Milestone 3 — authentication and notifications
+
+In progress:
+
+- Mobile OAuth exchange-code architecture
+- Session-security guidance
+- Push permission/registration bridge
+- Push token, foreground-notification and notification-action events
+- Backend/web integration requirements documented
+
+The remaining integration work that must happen in the production website/backend is tracked in `docs/website-integration.md`.
 
 ## First local setup
 
@@ -41,14 +71,29 @@ npm run open:android
 
 ## Current web loading strategy
 
-The native container currently loads the production Pech Pechoo site at `https://pechpechoo.au`. A minimal `www/index.html` is retained as the Capacitor web directory/fallback shell.
+The native container loads the production Pech Pechoo site at `https://pechpechoo.au`. A minimal `www/index.html` remains as the Capacitor web directory/fallback shell.
 
-The web/native bridge, offline UX, navigation handling, deep links and authentication integration will be added in the next milestones.
+Because the production site is loaded directly, the TypeScript under `src/` is the reference mobile runtime that must be integrated into the website bundle by the web developer. This lets Pech Pechoo keep one primary product codebase while still exposing native behaviour.
+
+## Push notifications
+
+See `docs/push-notifications.md` for device registration, backend token association, Android Firebase setup and iOS APNs requirements.
+
+## Authentication
+
+See `docs/authentication.md` for the Google OAuth mobile flow and exchange-code design.
 
 ## App artwork
 
-See `resources/README.md`. Final icon and splash assets require the approved Pech Pechoo logo/brand artwork.
+Approved source artwork is stored in `resources/`. Run:
+
+```bash
+npm run assets
+npm run sync
+```
+
+after the native projects have been created to generate platform-specific app artwork.
 
 ## Secrets
 
-Do not commit Firebase configuration, signing keys, provisioning profiles, certificates or environment secrets. The repository is public.
+Do not commit signing keys, provisioning profiles, certificates, JWT secrets, APNs private keys, Firebase server credentials or environment secrets. The repository is public.
