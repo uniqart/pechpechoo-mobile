@@ -17,6 +17,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             guard let self = self,
                   let window = self.window else { return }
 
+            // Enable the native iOS edge-swipe back/forward gestures for the Capacitor WKWebView.
+            if let bridgeViewController = window.rootViewController as? CAPBridgeViewController {
+                bridgeViewController.webView?.allowsBackForwardNavigationGestures = true
+            }
+
             let topInset = window.safeAreaInsets.top
             guard topInset > 0 else { return }
 
@@ -44,6 +49,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
+        // Re-apply in case the WebView was recreated while the app was inactive.
+        if let bridgeViewController = window?.rootViewController as? CAPBridgeViewController {
+            bridgeViewController.webView?.allowsBackForwardNavigationGestures = true
+        }
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
