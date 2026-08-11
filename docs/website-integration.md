@@ -145,9 +145,26 @@ window.addEventListener('pechpechoo:push-token', async (event) => {
 
 The backend should associate multiple device tokens with a user rather than storing a single token on the user record. See `docs/push-notifications.md`.
 
-Handle foreground notifications using `pechpechoo:push-received` and notification taps using `pechpechoo:push-action`.
+Foreground notifications are emitted through `pechpechoo:push-received`.
 
-Notification navigation should use a validated Pech Pechoo internal path such as `/events/123`; never navigate directly to an arbitrary URL received in push data.
+Notification taps emit both `pechpechoo:push-action` and, when a safe internal route exists, `pechpechoo:navigate`:
+
+```ts
+window.addEventListener('pechpechoo:navigate', (event) => {
+  const { path, source } = event.detail;
+  // Route with the application's normal client-side router.
+});
+```
+
+Push payloads should use a path such as:
+
+```json
+{
+  "path": "/events/123"
+}
+```
+
+The native layer rejects absolute URLs, protocol-relative URLs and external origins. The frontend should still route only to screens supported by the product.
 
 ## 9. Native share sheet
 
@@ -176,15 +193,33 @@ The returned `webPath` is suitable for preview/display. The web developer must c
 
 Ask for camera/photo permission only when the user starts the relevant action.
 
-## 11. Native detection
+## 11. Universal Links and Android App Links
+
+The custom `pechpechoo://` callback is sufficient for the initial mobile OAuth implementation, but production HTTPS links should later open the installed app where appropriate.
+
+The website will need to host:
+
+- `/.well-known/apple-app-site-association`
+- `/.well-known/assetlinks.json`
+
+The exact values depend on the final Apple Team ID and Android signing certificate fingerprint. Do not publish placeholder values.
+
+Once configured, keep routes narrow: only claim Pech Pechoo URLs that genuinely belong inside the app.
+
+## 12. Native detection
 
 Do not rely on user-agent sniffing. Use Capacitor native-platform detection in the website bundle and keep the normal website behaviour unchanged in desktop/mobile browsers.
 
-## 12. Remaining handoff work
+## 13. Final backend/API tasks
 
-The checklist will still be extended for:
+Before store submission, backend work should include:
 
-- Universal/App Links for HTTPS deep linking
-- Store/privacy configuration
-- Final notification-route mapping
-- Any backend endpoint naming differences discovered during integration
+- mobile Google OAuth branch + short-lived exchange code
+- Apple sign-in route + identity validation/account linking
+- `POST /api/v1/auth/mobile/exchange` or equivalent
+- authenticated device-token registration/removal endpoints
+- notification payloads using validated internal `path` values
+- logout/device-token behaviour agreed and implemented
+- privacy policy/terms URLs available publicly
+
+Any endpoint naming can differ from this document as long as the same security model and behaviour are retained.
