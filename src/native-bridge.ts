@@ -2,6 +2,11 @@ import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { Network } from '@capacitor/network';
 import { SplashScreen } from '@capacitor/splash-screen';
+import {
+  enablePushNotifications,
+  getPushPermission,
+  initialisePushNotificationListeners,
+} from './push-notifications';
 
 const APP_SCHEME = 'pechpechoo://';
 const TRUSTED_HOSTS = new Set(['pechpechoo.au', 'www.pechpechoo.au']);
@@ -14,6 +19,8 @@ type NativeBridge = {
   startGoogleLogin: () => Promise<void>;
   getNetworkStatus: () => Promise<{ connected: boolean; connectionType: string }>;
   hideSplash: () => Promise<void>;
+  getPushPermission: () => Promise<string>;
+  enablePushNotifications: () => Promise<{ permission: string; registered: boolean }>;
 };
 
 declare global {
@@ -103,6 +110,8 @@ async function updateOfflineState(connected: boolean) {
 }
 
 export async function initialiseNativeBridge(platform: NativeBridge['platform']) {
+  await initialisePushNotificationListeners();
+
   window.PechPechooNative = {
     isNative: true,
     platform,
@@ -122,6 +131,8 @@ export async function initialiseNativeBridge(platform: NativeBridge['platform'])
     hideSplash: async () => {
       await SplashScreen.hide();
     },
+    getPushPermission: async () => getPushPermission(),
+    enablePushNotifications: async () => enablePushNotifications(),
   };
 
   const initialStatus = await Network.getStatus();
