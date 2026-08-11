@@ -7,7 +7,8 @@
     "native:add": "npm run native:add:ios && npm run native:add:android",
     "native:add:ios": "npx cap add ios",
     "native:add:android": "npx cap add android",
-    "sync": "npx cap sync",
+    "native:links": "node scripts/configure-native-links.mjs",
+    "sync": "npx cap sync && npm run native:links",
     "open:ios": "npx cap open ios",
     "open:android": "npx cap open android",
     "assets": "npx capacitor-assets generate"
