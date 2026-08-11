@@ -1,26 +1,27 @@
 # Mobile authentication
 
-## Current backend
+## Existing application
 
-- Node.js/Express + MongoDB/Mongoose
-- Passport.js
-- Custom JWT access/refresh tokens
-- Google OAuth via `passport-google-oauth20`
+- Frontend: `uniqart/PechPechoo` — Next.js 16, React 19, Redux Toolkit, Axios.
+- Backend: Node.js/Express + MongoDB/Mongoose, Passport.js, custom JWT auth.
+- Google: `passport-google-oauth20`.
+
+Do not create a separate mobile user store or auth system. Reuse the existing API, Redux auth state and Axios layer.
 
 ## Google mobile flow
 
-Do not authenticate Google inside the app WebView.
+Do not run Google OAuth inside the app WebView.
 
-1. App opens `https://pechpechoo.au/auth/google?platform=mobile` in the system browser.
-2. Existing Google OAuth flow completes normally.
-3. Backend creates/links the user.
-4. For `platform=mobile`, backend creates a random, single-use exchange code that expires in 60–120 seconds.
+1. Native Google button calls `window.PechPechooNative.startGoogleLogin()`.
+2. App opens `https://pechpechoo.au/auth/google?platform=mobile` in the system browser.
+3. Existing Passport Google flow authenticates and creates/links the user.
+4. Backend preserves the mobile context and creates a random, single-use code expiring in 60–120 seconds.
 5. Backend redirects to:
 
 `pechpechoo://auth/callback?provider=google&code=<code>`
 
-6. App receives the deep link and emits `pechpechoo:auth-callback`.
-7. Website posts the code to:
+6. App emits `pechpechoo:auth-callback`.
+7. Frontend exchanges the code:
 
 `POST /api/v1/auth/mobile/exchange`
 
@@ -28,36 +29,55 @@ Do not authenticate Google inside the app WebView.
 { "code": "<code>" }
 ```
 
-8. Exchange endpoint consumes the code once and establishes/returns the normal Pech Pechoo authenticated session using the existing auth model.
+8. Use the exchange response to update the existing PechPechoo auth state/session exactly as a normal successful login does.
 
-## Frontend requirement
+## PechPechoo frontend integration
 
-In the native app only, the Google button must call:
+Relevant existing files:
 
-```ts
-window.PechPechooNative?.startGoogleLogin()
+- `src/features/auth/components/AuthForm.jsx`
+- `src/app/auth/authForms/AuthSocialButtons.jsx`
+- `src/store/auth/authSlice.js`
+- existing shared Axios/API configuration
+
+The Google button already receives `onGoogleAuth`. Keep the normal browser handler unchanged; branch only when running natively.
+
+```js
+if (window.PechPechooNative?.isNative) {
+  await window.PechPechooNative.startGoogleLogin();
+  return;
+}
+
+// existing browser Google login
 ```
 
-Listen for:
+Register the callback in client-side code only:
 
-```ts
+```js
 window.addEventListener('pechpechoo:auth-callback', async (event) => {
-  const { code } = event.detail;
-  // exchange code, then update the existing auth/session state
+  const { code, provider } = event.detail;
+  // Exchange code through the existing Axios layer.
+  // Dispatch/update the existing Redux auth state.
 });
 ```
 
-Handle `pechpechoo:auth-error` with the normal login error UI.
+Handle `pechpechoo:auth-error` through the existing auth error UI.
+
+## Backend requirements
+
+- Preserve `platform=mobile` safely through the OAuth round trip, preferably using validated OAuth `state` or server-side state rather than trusting a callback query parameter.
+- Add the single-use exchange-code store and `POST /api/v1/auth/mobile/exchange`.
+- Consume each code atomically once.
+- Return the same user/token/session contract expected by the existing frontend auth logic.
 
 ## Security
 
-- Never put access or refresh JWTs in callback URLs.
-- Exchange codes must be random, short-lived and single-use.
-- Keep OAuth/JWT secrets server-side only.
-- Restrict mobile redirects to approved Pech Pechoo callback URLs/schemes.
-- Keep the existing backend as the single authentication authority.
-- If long-lived refresh tokens are currently stored in JavaScript-accessible storage, review moving them to a Secure, HttpOnly cookie where compatible with the existing architecture.
+- Never put Pech Pechoo JWTs in callback URLs.
+- Exchange codes must be cryptographically random, single-use and short-lived.
+- Keep Google OAuth/JWT secrets server-side.
+- Restrict redirects to approved Pech Pechoo callbacks.
+- Review any long-lived refresh token stored in JavaScript-accessible storage; prefer a Secure, HttpOnly cookie where compatible with the existing architecture.
 
 ## Acceptance test
 
-On a physical iPhone/Android device: tap Google → system browser opens → authenticate → app reopens → user is logged in inside the app.
+Physical iPhone/Android: tap Google → system browser → authenticate → Pech Pechoo app reopens → existing Redux session shows the user as logged in.
