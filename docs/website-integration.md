@@ -4,14 +4,16 @@ This file is the running handoff checklist for the Pech Pechoo web developer. Th
 
 ## 1. Add Capacitor mobile runtime to the web app
 
-Install the required Capacitor packages in the website project and port/import the logic from `src/native-bridge.ts`, `src/push-notifications.ts` and `src/index.ts`.
+Install the required Capacitor packages in the website project and port/import the logic from `src/native-bridge.ts`, `src/push-notifications.ts`, `src/native-features.ts` and `src/index.ts`.
 
 Required packages:
 
 - `@capacitor/app`
 - `@capacitor/browser`
+- `@capacitor/camera`
 - `@capacitor/network`
 - `@capacitor/push-notifications`
+- `@capacitor/share`
 - `@capacitor/splash-screen`
 
 The website should initialise the bridge only when `Capacitor.isNativePlatform()` is true.
@@ -24,30 +26,40 @@ window.PechPechooNative = {
   platform: 'ios' | 'android',
   openExternal(url),
   startGoogleLogin(),
+  startAppleLogin(),
   getNetworkStatus(),
   hideSplash(),
   getPushPermission(),
   enablePushNotifications(),
+  share(input),
+  takePhoto(),
+  pickPhoto(),
 };
 ```
 
-## 2. Google login button
+## 2. Google and Apple login buttons
 
-When running natively, the existing Google button must call:
+When running natively, Google login must call:
 
 ```ts
 window.PechPechooNative?.startGoogleLogin()
 ```
 
-instead of navigating the embedded WebView to Google OAuth.
+Apple login must call:
 
-The backend must support the mobile OAuth branch described in `docs/authentication.md`.
+```ts
+window.PechPechooNative?.startAppleLogin()
+```
 
-The website should listen for:
+Do not navigate the embedded WebView directly to either identity provider.
+
+The backend must support the mobile OAuth branch described in `docs/authentication.md` and `docs/apple-sign-in.md`.
+
+The website should listen for the shared callback event:
 
 ```ts
 window.addEventListener('pechpechoo:auth-callback', async (event) => {
-  const { code } = event.detail;
+  const { code, provider } = event.detail;
   // POST code to /api/v1/auth/mobile/exchange
   // Persist the returned web session/JWT state using the app's normal auth layer.
 });
@@ -59,7 +71,7 @@ Also handle `pechpechoo:auth-error` and show the normal login error UI.
 
 Keep the current backend as the single authority for authentication. The mobile wrapper must not create a parallel user/session system.
 
-For Google mobile login, exchange only a short-lived, single-use code through the deep link. Never place access or refresh JWTs in the callback URL.
+For mobile social login, exchange only a short-lived, single-use code through the deep link. Never place access or refresh JWTs in the callback URL.
 
 After the code exchange, use the website's existing authenticated-session mechanism. If the current refresh token is accessible to JavaScript (for example localStorage), the development team should review moving the long-lived refresh credential to a Secure, HttpOnly cookie where the current architecture permits it. Access tokens should remain short-lived.
 
@@ -137,15 +149,42 @@ Handle foreground notifications using `pechpechoo:push-received` and notificatio
 
 Notification navigation should use a validated Pech Pechoo internal path such as `/events/123`; never navigate directly to an arbitrary URL received in push data.
 
-## 9. Native detection
+## 9. Native share sheet
+
+Where sharing is useful, call:
+
+```ts
+await window.PechPechooNative?.share({
+  title: 'Pech Pechoo',
+  text: 'Optional share text',
+  url: 'https://pechpechoo.au/...',
+});
+```
+
+Keep the browser Web Share API or existing fallback for non-native users.
+
+## 10. Camera and photo library
+
+The bridge provides:
+
+```ts
+const cameraPhoto = await window.PechPechooNative?.takePhoto();
+const libraryPhoto = await window.PechPechooNative?.pickPhoto();
+```
+
+The returned `webPath` is suitable for preview/display. The web developer must connect the selected image to the application's existing upload pipeline rather than treating the path as a permanent file URL.
+
+Ask for camera/photo permission only when the user starts the relevant action.
+
+## 11. Native detection
 
 Do not rely on user-agent sniffing. Use Capacitor native-platform detection in the website bundle and keep the normal website behaviour unchanged in desktop/mobile browsers.
 
-## 10. Work still to be added to this handoff
+## 12. Remaining handoff work
 
-The checklist will be extended as later milestones add:
+The checklist will still be extended for:
 
-- Sign in with Apple
-- Native sharing/camera/file access where required
 - Universal/App Links for HTTPS deep linking
 - Store/privacy configuration
+- Final notification-route mapping
+- Any backend endpoint naming differences discovered during integration
