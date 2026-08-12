@@ -5,7 +5,6 @@ import Capacitor
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
-    private var statusBarBackgroundView: UIView?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         let brandBlue = UIColor(red: 86.0 / 255.0, green: 105.0 / 255.0, blue: 255.0 / 255.0, alpha: 1.0)
@@ -17,23 +16,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             guard let self = self,
                   let window = self.window else { return }
 
-            // Enable the native iOS edge-swipe back/forward gestures for the Capacitor WKWebView.
+            // Keep native iOS edge-swipe back/forward gestures enabled.
             if let bridgeViewController = window.rootViewController as? CAPBridgeViewController {
                 bridgeViewController.webView?.allowsBackForwardNavigationGestures = true
             }
-
-            let topInset = window.safeAreaInsets.top
-            guard topInset > 0 else { return }
-
-            let statusBarView = UIView(frame: CGRect(x: 0, y: 0, width: window.bounds.width, height: topInset))
-            statusBarView.backgroundColor = brandBlue
-            statusBarView.autoresizingMask = [.flexibleWidth, .flexibleBottomMargin]
-            statusBarView.isUserInteractionEnabled = false
-            statusBarView.tag = 5669
-
-            window.viewWithTag(5669)?.removeFromSuperview()
-            window.addSubview(statusBarView)
-            self.statusBarBackgroundView = statusBarView
         }
 
         return true
@@ -49,7 +35,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
-        // Re-apply in case the WebView was recreated while the app was inactive.
         if let bridgeViewController = window?.rootViewController as? CAPBridgeViewController {
             bridgeViewController.webView?.allowsBackForwardNavigationGestures = true
         }
