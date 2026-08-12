@@ -21,9 +21,9 @@ const config: CapacitorConfig = {
       showSpinner: false
     },
     StatusBar: {
-      overlaysWebView: false,
+      overlaysWebView: true,
       style: 'LIGHT',
-      backgroundColor: BRAND_BLUE
+      backgroundColor: '#00000000'
     }
   },
   android: {
@@ -31,7 +31,7 @@ const config: CapacitorConfig = {
   },
   ios: {
     backgroundColor: BRAND_BLUE,
-    contentInset: 'automatic'
+    contentInset: 'never'
   }
 };
 
