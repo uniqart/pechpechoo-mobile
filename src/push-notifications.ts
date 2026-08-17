@@ -54,14 +54,21 @@ export async function initialisePushNotificationListeners() {
     'pushNotificationActionPerformed',
     (action: ActionPerformed) => {
       const path = getSafeInternalPath(action.notification);
+      const data = {
+        ...(action.notification.data || {}),
+        ...(path ? { path } : {}),
+      };
 
+      // Contract consumed by the Next.js application:
+      // event.detail.data.path
       dispatch('pechpechoo:push-action', {
+        data,
         actionId: action.actionId,
         inputValue: action.inputValue,
         notification: action.notification,
-        path,
       });
 
+      // Keep the existing validated navigation event for backwards compatibility.
       if (path) {
         dispatch('pechpechoo:navigate', { path, source: 'push' });
       }
