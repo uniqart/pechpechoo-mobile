@@ -42,6 +42,8 @@ if (fs.existsSync(iosInfo)) {
 if (fs.existsSync(iosProject)) {
   let project = fs.readFileSync(iosProject, 'utf8');
 
+  // The existing Android package remains au.pechpechoo. Only the Xcode target
+  // is overridden to the production Apple Bundle ID.
   project = project.replace(
     /PRODUCT_BUNDLE_IDENTIFIER = [^;]+;/g,
     `PRODUCT_BUNDLE_IDENTIFIER = ${IOS_BUNDLE_ID};`,
@@ -65,14 +67,14 @@ if (fs.existsSync(iosProject)) {
   const firebaseBuildRef = 'A11C0FFEE1234567890ABC02';
   const entitlementsFileRef = 'A11C0FFEE1234567890ABC03';
 
-  if (!project.includes('GoogleService-Info.plist in Resources')) {
+  if (!project.includes(`${firebaseBuildRef} /* GoogleService-Info.plist in Resources */ =`)) {
     project = project.replace(
       '/* End PBXBuildFile section */',
       `\t\t${firebaseBuildRef} /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = ${firebaseFileRef} /* GoogleService-Info.plist */; };\n/* End PBXBuildFile section */`,
     );
   }
 
-  if (!project.includes(`${firebaseFileRef} /* GoogleService-Info.plist */`)) {
+  if (!project.includes(`${firebaseFileRef} /* GoogleService-Info.plist */ = {isa = PBXFileReference;`)) {
     project = project.replace(
       '/* End PBXFileReference section */',
       `\t\t${firebaseFileRef} /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };\n\t\t${entitlementsFileRef} /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };\n/* End PBXFileReference section */`,
