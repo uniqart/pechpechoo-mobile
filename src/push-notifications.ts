@@ -1,10 +1,9 @@
 import {
-  PushNotifications,
+  FirebaseMessaging,
   type PermissionStatus,
-  type PushNotificationSchema,
+  type Notification,
   type ActionPerformed,
-  type Token,
-} from '@capacitor/push-notifications';
+} from '@capacitor-firebase/messaging';
 
 export type PushRegistrationResult = {
   permission: PermissionStatus['receive'];
@@ -15,7 +14,7 @@ function dispatch(name: string, detail?: unknown) {
   window.dispatchEvent(new CustomEvent(name, { detail }));
 }
 
-function getSafeInternalPath(notification: PushNotificationSchema): string | null {
+function getSafeInternalPath(notification: Notification): string | null {
   const raw = notification.data?.path;
   if (typeof raw !== 'string') return null;
   if (!raw.startsWith('/') || raw.startsWith('//')) return null;
@@ -35,49 +34,38 @@ export async function initialisePushNotificationListeners() {
   if (listenersInitialised) return;
   listenersInitialised = true;
 
-  await PushNotifications.addListener('registration', (token: Token) => {
-    dispatch('pechpechoo:push-token', { token: token.value });
+  // Firebase Messaging emits an FCM registration token on both iOS and Android.
+  // This is the token expected by the backend Firebase Admin SDK.
+  await FirebaseMessaging.addListener('tokenReceived', ({ token }) => {
+    dispatch('pechpechoo:push-token', { token, provider: 'fcm' });
   });
 
-  await PushNotifications.addListener('registrationError', (error) => {
-    dispatch('pechpechoo:push-registration-error', { error });
+  await FirebaseMessaging.addListener('notificationReceived', (notification: Notification) => {
+    dispatch('pechpechoo:push-received', { notification });
   });
 
-  await PushNotifications.addListener(
-    'pushNotificationReceived',
-    (notification: PushNotificationSchema) => {
-      dispatch('pechpechoo:push-received', { notification });
-    },
-  );
+  await FirebaseMessaging.addListener('notificationActionPerformed', (action: ActionPerformed) => {
+    const path = getSafeInternalPath(action.notification);
+    const data = {
+      ...(action.notification.data || {}),
+      ...(path ? { path } : {}),
+    };
 
-  await PushNotifications.addListener(
-    'pushNotificationActionPerformed',
-    (action: ActionPerformed) => {
-      const path = getSafeInternalPath(action.notification);
-      const data = {
-        ...(action.notification.data || {}),
-        ...(path ? { path } : {}),
-      };
+    dispatch('pechpechoo:push-action', {
+      data,
+      actionId: action.actionId,
+      inputValue: action.inputValue,
+      notification: action.notification,
+    });
 
-      // Contract consumed by the Next.js application:
-      // event.detail.data.path
-      dispatch('pechpechoo:push-action', {
-        data,
-        actionId: action.actionId,
-        inputValue: action.inputValue,
-        notification: action.notification,
-      });
-
-      // Keep the existing validated navigation event for backwards compatibility.
-      if (path) {
-        dispatch('pechpechoo:navigate', { path, source: 'push' });
-      }
-    },
-  );
+    if (path) {
+      dispatch('pechpechoo:navigate', { path, source: 'push' });
+    }
+  });
 }
 
 export async function getPushPermission() {
-  const permissions = await PushNotifications.checkPermissions();
+  const permissions = await FirebaseMessaging.checkPermissions();
   return permissions.receive;
 }
 
@@ -85,7 +73,7 @@ export async function enablePushNotifications(): Promise<PushRegistrationResult>
   let permission = await getPushPermission();
 
   if (permission === 'prompt' || permission === 'prompt-with-rationale') {
-    const requested = await PushNotifications.requestPermissions();
+    const requested = await FirebaseMessaging.requestPermissions();
     permission = requested.receive;
   }
 
@@ -94,6 +82,18 @@ export async function enablePushNotifications(): Promise<PushRegistrationResult>
   }
 
   await initialisePushNotificationListeners();
-  await PushNotifications.register();
-  return { permission, registered: true };
+
+  try {
+    // getToken() registers for remote notifications and returns the FCM token
+    // required by firebase-admin/messaging on the backend.
+    const { token } = await FirebaseMessaging.getToken();
+    if (!token) {
+      throw new Error('Firebase Messaging returned an empty FCM token.');
+    }
+    dispatch('pechpechoo:push-token', { token, provider: 'fcm' });
+    return { permission, registered: true };
+  } catch (error) {
+    dispatch('pechpechoo:push-registration-error', { error });
+    return { permission, registered: false };
+  }
 }
