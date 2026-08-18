@@ -24,10 +24,6 @@ const config: CapacitorConfig = {
       overlaysWebView: true,
       style: 'LIGHT',
       backgroundColor: '#00000000'
-    },
-    GoogleSignIn: {
-      clientId: '51321670906-kfqr213paho92bnv00ra8f94d81tiuhm.apps.googleusercontent.com',
-      forceCodeForRefreshToken: true,
     }
   },
   android: {
