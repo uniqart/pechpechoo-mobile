@@ -20,6 +20,8 @@ def capacitor_pods
   pod 'CapacitorSplashScreen', :path => '../../node_modules/@capacitor/splash-screen'
   pod 'CapacitorStatusBar', :path => '../../node_modules/@capacitor/status-bar'
   pod 'CapacitorFirebaseMessaging', :path => '../../node_modules/@capacitor-firebase/messaging'
+  pod 'CapawesomeCapacitorAppleSignIn', :path => '../../node_modules/@capawesome/capacitor-apple-sign-in'
+  pod 'CapawesomeCapacitorGoogleSignIn', :path => '../../node_modules/@capawesome/capacitor-google-sign-in'
 end
 
 target 'App' do
