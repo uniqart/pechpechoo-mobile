@@ -44,6 +44,35 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+        if let scheme = url.scheme?.lowercased(), scheme == "pechpechoo" {
+            let urlString = url.absoluteString
+            DispatchQueue.main.async { [weak self] in
+                // 1. Dismiss presented in-app browser modals
+                self?.window?.rootViewController?.dismiss(animated: true, completion: nil)
+                for scene in UIApplication.shared.connectedScenes {
+                    if let windowScene = scene as? UIWindowScene {
+                        for window in windowScene.windows {
+                            window.rootViewController?.dismiss(animated: true, completion: nil)
+                        }
+                    }
+                }
+
+                // 2. Direct JavaScript injection into WKWebView
+                let escapedUrl = urlString.replacingOccurrences(of: "'", with: "\\'")
+                let js = """
+                (function() {
+                    var deepLinkUrl = '\(escapedUrl)';
+                    window.dispatchEvent(new CustomEvent('pechpechoo:deep-link', { detail: deepLinkUrl }));
+                    if (window.PechPechooRouteDeepLink) {
+                        window.PechPechooRouteDeepLink(deepLinkUrl);
+                    }
+                })();
+                """
+                if let bridgeVC = self?.window?.rootViewController as? CAPBridgeViewController {
+                    bridgeVC.webView?.evaluateJavaScript(js, completionHandler: nil)
+                }
+            }
+        }
         return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
     }
 
