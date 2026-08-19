@@ -10,9 +10,11 @@ import {
 import { pickPhoto, shareContent, takePhoto } from './native-features';
 
 const APP_SCHEME = 'pechpechoo://';
-const TRUSTED_HOSTS = new Set(['pechpechoo.au', 'www.pechpechoo.au']);
-const GOOGLE_AUTH_PATH = '/auth/google';
-const APPLE_AUTH_PATH = '/auth/apple';
+const API_BASE = 'https://pech-pechoo-77b2f05c2712.herokuapp.com/api/v1';
+const GOOGLE_AUTH_PATH = `${API_BASE}/auth/google`;
+const APPLE_AUTH_PATH = `${API_BASE}/auth/apple`;
+
+const processedDeepLinks = new Set<string>();
 
 type NativeBridge = {
   isNative: true;
@@ -35,37 +37,87 @@ declare global {
   }
 }
 
-function isTrustedWebUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' && TRUSTED_HOSTS.has(url.hostname);
-  } catch {
-    return false;
-  }
-}
-
 function dispatch(name: string, detail?: unknown) {
   window.dispatchEvent(new CustomEvent(name, { detail }));
 }
 
+function parseAppDeepLink(url: string) {
+  if (!url || typeof url !== 'string') return null;
+
+  // Replace custom scheme with https:// so standard WHATWG URL parser extracts host/params correctly
+  const normalized = url.replace(/^pechpechoo:\/\//i, 'https://');
+
+  try {
+    const parsed = new URL(normalized);
+    const searchParams = parsed.searchParams;
+
+    let hashParams = new URLSearchParams();
+    if (parsed.hash && parsed.hash.length > 1) {
+      hashParams = new URLSearchParams(parsed.hash.substring(1));
+    }
+
+    const getParam = (key: string) => searchParams.get(key) || hashParams.get(key);
+
+    return {
+      host: parsed.hostname || parsed.host,
+      path: parsed.pathname,
+      code: getParam('code'),
+      accessToken: getParam('accessToken') || getParam('accesstoken'),
+      refreshToken: getParam('refreshToken') || getParam('refreshtoken'),
+      error: getParam('error') || getParam('error_description'),
+      provider: getParam('provider') || 'unknown',
+    };
+  } catch (err) {
+    console.error('[Pech Pechoo] Failed to parse deep link URL:', url, err);
+    return null;
+  }
+}
+
 function routeDeepLink(url: string) {
-  if (!url.startsWith(APP_SCHEME)) return;
+  if (!url || typeof url !== 'string') return;
+  if (!url.toLowerCase().startsWith(APP_SCHEME)) return;
 
-  const parsed = new URL(url);
-  if (parsed.hostname === 'auth' && parsed.pathname === '/callback') {
-    const code = parsed.searchParams.get('code');
-    const error = parsed.searchParams.get('error');
-    const provider = parsed.searchParams.get('provider') ?? 'unknown';
-
+  // Close the in-app browser overlay immediately upon deep link reception
+  void Browser.close().catch(() => undefined);
+  setTimeout(() => {
     void Browser.close().catch(() => undefined);
+  }, 300);
 
-    if (error) {
-      dispatch('pechpechoo:auth-error', { error, provider });
+  if (processedDeepLinks.has(url)) return;
+  processedDeepLinks.add(url);
+
+  console.log('[Pech Pechoo] Processing native deep link:', url);
+
+  const parsed = parseAppDeepLink(url);
+  if (!parsed) return;
+
+  const isAuth =
+    parsed.host === 'auth' ||
+    parsed.path.includes('auth') ||
+    parsed.path.includes('callback') ||
+    Boolean(parsed.code) ||
+    Boolean(parsed.accessToken);
+
+  if (isAuth) {
+    if (parsed.error) {
+      dispatch('pechpechoo:auth-error', { error: parsed.error, provider: parsed.provider });
       return;
     }
 
-    if (code) {
-      dispatch('pechpechoo:auth-callback', { code, provider });
+    if (parsed.accessToken) {
+      dispatch('pechpechoo:auth-callback', {
+        accessToken: parsed.accessToken,
+        refreshToken: parsed.refreshToken,
+        provider: parsed.provider,
+      });
+      return;
+    }
+
+    if (parsed.code) {
+      dispatch('pechpechoo:auth-callback', {
+        code: parsed.code,
+        provider: parsed.provider,
+      });
     }
   }
 }
@@ -116,12 +168,6 @@ async function updateOfflineState(connected: boolean) {
   overlay.style.display = connected ? 'none' : 'flex';
 }
 
-function mobileAuthUrl(path: string) {
-  const url = new URL(path, 'https://pechpechoo.au');
-  url.searchParams.set('platform', 'mobile');
-  return url.toString();
-}
-
 export async function initialiseNativeBridge(platform: NativeBridge['platform']) {
   await initialisePushNotificationListeners();
 
@@ -129,14 +175,20 @@ export async function initialiseNativeBridge(platform: NativeBridge['platform'])
     isNative: true,
     platform,
     openExternal: async (url: string) => {
-      if (!/^https:\/\//i.test(url)) throw new Error('Only HTTPS URLs may be opened externally.');
-      await Browser.open({ url });
+      let targetUrl = url?.trim();
+      if (!targetUrl) return;
+      if (!/^(https?:\/\/|mailto:|tel:)/i.test(targetUrl)) {
+        targetUrl = `https://${targetUrl}`;
+      }
+      await Browser.open({ url: targetUrl, windowName: '_self' });
     },
     startGoogleLogin: async () => {
-      await Browser.open({ url: mobileAuthUrl(GOOGLE_AUTH_PATH) });
+      const url = `${GOOGLE_AUTH_PATH}?platform=mobile`;
+      await Browser.open({ url });
     },
     startAppleLogin: async () => {
-      await Browser.open({ url: mobileAuthUrl(APPLE_AUTH_PATH) });
+      const url = `${APPLE_AUTH_PATH}?platform=mobile`;
+      await Browser.open({ url });
     },
     getNetworkStatus: async () => {
       const status = await Network.getStatus();
@@ -157,6 +209,16 @@ export async function initialiseNativeBridge(platform: NativeBridge['platform'])
 
   await App.addListener('appUrlOpen', ({ url }) => routeDeepLink(url));
 
+  // Check if app was cold-started from a deep link
+  try {
+    const launchUrl = await App.getLaunchUrl();
+    if (launchUrl?.url && launchUrl.url.startsWith(APP_SCHEME)) {
+      routeDeepLink(launchUrl.url);
+    }
+  } catch (err) {
+    console.warn('[Pech Pechoo] getLaunchUrl check failed:', err);
+  }
+
   if (platform === 'android') {
     await App.addListener('backButton', ({ canGoBack }) => {
       if (canGoBack || window.history.length > 1) {
@@ -173,20 +235,6 @@ export async function initialiseNativeBridge(platform: NativeBridge['platform'])
       connected: status.connected,
       connectionType: status.connectionType,
     });
-  });
-
-  document.addEventListener('click', async (event) => {
-    const target = event.target as HTMLElement | null;
-    const anchor = target?.closest('a[href]') as HTMLAnchorElement | null;
-    if (!anchor) return;
-
-    const href = anchor.href;
-    if (!href || isTrustedWebUrl(href)) return;
-
-    if (/^https:\/\//i.test(href)) {
-      event.preventDefault();
-      await Browser.open({ url: href });
-    }
   });
 
   dispatch('pechpechoo:native-ready', { platform });
