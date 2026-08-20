@@ -24,6 +24,13 @@ const config: CapacitorConfig = {
       overlaysWebView: true,
       style: 'LIGHT',
       backgroundColor: '#00000000'
+    },
+    Keyboard: {
+      // Prevent iOS from resizing the WebView when the keyboard opens.
+      // This eliminates the viewport height change that causes fullscreen
+      // dialogs (like WriteReviewForm) to re-layout and flicker.
+      resize: 'none',
+      resizeOnFullScreen: false
     }
   },
   android: {
