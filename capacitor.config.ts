@@ -3,7 +3,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const BRAND_BLUE = '#5669FF';
 
 const config: CapacitorConfig = {
-  appId: 'au.pechpechoo',
+  appId: 'au.pechpechoo.app',
   appName: 'Pech Pechoo',
   webDir: 'www',
   bundledWebRuntime: false,
