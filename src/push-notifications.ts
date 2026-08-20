@@ -97,3 +97,11 @@ export async function enablePushNotifications(): Promise<PushRegistrationResult>
     return { permission, registered: false };
   }
 }
+
+export async function clearBadgeCount(): Promise<void> {
+  try {
+    await FirebaseMessaging.removeAllDeliveredNotifications();
+  } catch {
+    // Ignore if not supported
+  }
+}
