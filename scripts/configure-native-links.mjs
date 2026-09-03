@@ -5,7 +5,7 @@ const iosInfo = 'ios/App/App/Info.plist';
 const iosProject = 'ios/App/App.xcodeproj/project.pbxproj';
 
 const IOS_BUNDLE_ID = 'au.pechpechoo.app';
-const APPLE_TEAM_ID = '8U3VBK78L4';
+const APPLE_TEAM_ID = '68D6E2QK47';
 
 if (fs.existsSync(androidManifest)) {
   let xml = fs.readFileSync(androidManifest, 'utf8');
@@ -56,7 +56,13 @@ if (fs.existsSync(iosProject)) {
     );
   }
 
-  if (!project.includes(`DEVELOPMENT_TEAM = ${APPLE_TEAM_ID};`)) {
+  // Keep signing pinned to the current organisation team after an app transfer.
+  if (/DEVELOPMENT_TEAM = [^;]+;/g.test(project)) {
+    project = project.replace(
+      /DEVELOPMENT_TEAM = [^;]+;/g,
+      `DEVELOPMENT_TEAM = ${APPLE_TEAM_ID};`,
+    );
+  } else {
     project = project.replace(
       /CODE_SIGN_STYLE = Automatic;/g,
       `CODE_SIGN_STYLE = Automatic;\n\t\t\t\tDEVELOPMENT_TEAM = ${APPLE_TEAM_ID};`,
@@ -97,5 +103,6 @@ if (fs.existsSync(iosProject)) {
 
   fs.writeFileSync(iosProject, project);
   console.log(`Configured iOS production bundle ID: ${IOS_BUNDLE_ID}`);
+  console.log(`Configured iOS signing team: ${APPLE_TEAM_ID}`);
   console.log('Configured iOS entitlements and Firebase plist in Xcode project');
 }
