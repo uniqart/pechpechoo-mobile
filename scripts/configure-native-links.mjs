@@ -9,17 +9,24 @@ const APPLE_TEAM_ID = '68D6E2QK47';
 
 if (fs.existsSync(androidManifest)) {
   let xml = fs.readFileSync(androidManifest, 'utf8');
-  if (!xml.includes('pechpechoo')) {
+
+  if (!xml.includes('android:scheme="pechpechoo"')) {
     xml = xml.replace(
-      '<activity',
-      '<activity',
-    ).replace(
       '</activity>',
       `  <intent-filter>\n        <action android:name="android.intent.action.VIEW" />\n        <category android:name="android.intent.category.DEFAULT" />\n        <category android:name="android.intent.category.BROWSABLE" />\n        <data android:scheme="pechpechoo" android:host="auth" />\n      </intent-filter>\n    </activity>`,
     );
-    fs.writeFileSync(androidManifest, xml);
     console.log('Configured Android deep link: pechpechoo://auth');
   }
+
+  if (!xml.includes('android:host="pechpechoo.au"')) {
+    xml = xml.replace(
+      '</activity>',
+      `  <intent-filter android:autoVerify="true">\n        <action android:name="android.intent.action.VIEW" />\n        <category android:name="android.intent.category.DEFAULT" />\n        <category android:name="android.intent.category.BROWSABLE" />\n        <data android:scheme="https" android:host="pechpechoo.au" />\n      </intent-filter>\n    </activity>`,
+    );
+    console.log('Configured Android App Link: https://pechpechoo.au');
+  }
+
+  fs.writeFileSync(androidManifest, xml);
 }
 
 if (fs.existsSync(iosInfo)) {
