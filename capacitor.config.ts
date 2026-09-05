@@ -34,10 +34,10 @@ const config: CapacitorConfig = {
     }
   },
   android: {
-    backgroundColor: BRAND_BLUE
+    backgroundColor: '#FFFFFF'
   },
   ios: {
-    backgroundColor: BRAND_BLUE,
+    backgroundColor: '#FFFFFF',
     contentInset: 'never'
   }
 };
