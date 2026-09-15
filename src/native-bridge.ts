@@ -10,11 +10,13 @@ import {
 import { pickPhoto, shareContent, takePhoto } from './native-features';
 
 const APP_SCHEME = 'pechpechoo://';
+const APP_HOSTS = new Set(['pechpechoo.au', 'www.pechpechoo.au']);
 const API_BASE = 'https://pech-pechoo-77b2f05c2712.herokuapp.com/api/v1';
 const GOOGLE_AUTH_PATH = `${API_BASE}/auth/google`;
 const APPLE_AUTH_PATH = `${API_BASE}/auth/apple`;
+const DEEP_LINK_DEDUPE_MS = 1500;
 
-const processedDeepLinks = new Set<string>();
+const processedDeepLinks = new Map<string, number>();
 
 type NativeBridge = {
   isNative: true;
@@ -39,6 +41,20 @@ declare global {
 
 function dispatch(name: string, detail?: unknown) {
   window.dispatchEvent(new CustomEvent(name, { detail }));
+}
+
+function wasRecentlyProcessed(url: string) {
+  const now = Date.now();
+  const lastProcessed = processedDeepLinks.get(url);
+  processedDeepLinks.set(url, now);
+
+  for (const [processedUrl, processedAt] of processedDeepLinks) {
+    if (now - processedAt > DEEP_LINK_DEDUPE_MS) {
+      processedDeepLinks.delete(processedUrl);
+    }
+  }
+
+  return typeof lastProcessed === 'number' && now - lastProcessed <= DEEP_LINK_DEDUPE_MS;
 }
 
 function parseAppDeepLink(url: string) {
@@ -73,18 +89,53 @@ function parseAppDeepLink(url: string) {
   }
 }
 
-function routeDeepLink(url: string) {
+function routeWebsiteDeepLink(url: string, coldStart = false) {
+  let parsed: URL;
+
+  try {
+    parsed = new URL(url);
+  } catch (err) {
+    console.error('[Pech Pechoo] Failed to parse website deep link:', url, err);
+    return false;
+  }
+
+  if (parsed.protocol !== 'https:' || !APP_HOSTS.has(parsed.hostname.toLowerCase())) {
+    return false;
+  }
+
+  const destination = `${parsed.pathname || '/'}${parsed.search}${parsed.hash}`;
+  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+
+  console.log('[Pech Pechoo] Routing website deep link:', destination);
+
+  if (destination === current) return true;
+
+  // The Capacitor WebView loads pechpechoo.au directly, so same-origin navigation
+  // lets the existing website/router render the linked event, artist, organiser, etc.
+  if (coldStart) {
+    window.location.replace(destination);
+  } else {
+    window.location.assign(destination);
+  }
+
+  return true;
+}
+
+function routeDeepLink(url: string, coldStart = false) {
   if (!url || typeof url !== 'string') return;
+  if (wasRecentlyProcessed(url)) return;
+
+  if (/^https:\/\//i.test(url) && routeWebsiteDeepLink(url, coldStart)) {
+    return;
+  }
+
   if (!url.toLowerCase().startsWith(APP_SCHEME)) return;
 
-  // Close the in-app browser overlay immediately upon deep link reception
+  // Close the in-app browser overlay immediately upon auth callback reception
   void Browser.close().catch(() => undefined);
   setTimeout(() => {
     void Browser.close().catch(() => undefined);
   }, 300);
-
-  if (processedDeepLinks.has(url)) return;
-  processedDeepLinks.add(url);
 
   console.log('[Pech Pechoo] Processing native deep link:', url);
 
@@ -209,11 +260,12 @@ export async function initialiseNativeBridge(platform: NativeBridge['platform'])
 
   await App.addListener('appUrlOpen', ({ url }) => routeDeepLink(url));
 
-  // Check if app was cold-started from a deep link
+  // Check if app was cold-started from either a website Universal/App Link
+  // or the custom-scheme OAuth callback.
   try {
     const launchUrl = await App.getLaunchUrl();
-    if (launchUrl?.url && launchUrl.url.startsWith(APP_SCHEME)) {
-      routeDeepLink(launchUrl.url);
+    if (launchUrl?.url) {
+      routeDeepLink(launchUrl.url, true);
     }
   } catch (err) {
     console.warn('[Pech Pechoo] getLaunchUrl check failed:', err);
