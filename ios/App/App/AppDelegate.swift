@@ -83,6 +83,33 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
+        // Capacitor's proxy remains the source of truth for Universal Links.
+        // For an already-running app, also forward the HTTPS URL directly to
+        // the live WebView so the requested event/profile replaces the page
+        // currently being shown instead of merely bringing the app forward.
+        if userActivity.activityType == NSUserActivityTypeBrowsingWeb,
+           let url = userActivity.webpageURL {
+            let urlString = url.absoluteString
+            DispatchQueue.main.async { [weak self] in
+                let escapedUrl = urlString
+                    .replacingOccurrences(of: "\\", with: "\\\\")
+                    .replacingOccurrences(of: "'", with: "\\'")
+                let js = """
+                (function() {
+                    var deepLinkUrl = '\(escapedUrl)';
+                    window.dispatchEvent(new CustomEvent('pechpechoo:deep-link', { detail: deepLinkUrl }));
+                    if (window.PechPechooRouteDeepLink) {
+                        window.PechPechooRouteDeepLink(deepLinkUrl);
+                    }
+                })();
+                """
+
+                if let bridgeVC = self?.window?.rootViewController as? CAPBridgeViewController {
+                    bridgeVC.webView?.evaluateJavaScript(js, completionHandler: nil)
+                }
+            }
+        }
+
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
